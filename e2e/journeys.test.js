@@ -140,6 +140,8 @@ test("an app the catalog doesn't list is added from its GitHub repository", asyn
   // A repository the catalog lists opens the catalog's app instead.
   await fromRepository("https://github.com/quiver/test-port");
   await (await app.$("h1=Test Port")).waitForDisplayed({ timeout: 10000 });
+  // That lookup read the release status feed, naming the launcher as the site's API terms ask.
+  assert.match(api.clients().at(-1) ?? "", /^quiver-launcher\/\d+\.\d+\.\d+/);
   await app.keys("Escape");
   await fromRepository("someone/homebrew");
   await (await app.$("p*=Downloads Homebrew-")).waitForDisplayed({ timeout: 10000 });

@@ -24,7 +24,8 @@ you may use them.
 
 When you release a fork, give it its own name, icon and identifier. In the Tauri app these are `productName`, the
 window `title`, `identifier` and the `icon` files in `apps/launcher/src-tauri/tauri.conf.json`, plus the name and logo
-shown in the app itself.
+shown in the app itself. Also change `CLIENT_NAME` in `apps/launcher/src/store.tsx`: it's the name the app sends
+quiverlauncher.com's API, and the site's [API terms](https://quiverlauncher.com/api-terms) ask each app to send its own.
 
 ## Questions
 

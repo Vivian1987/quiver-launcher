@@ -87,6 +87,8 @@ export async function startMockApi({ pageSize = Infinity } = {}) {
   let base = "";
   let lastQuery = new URLSearchParams();
   const convexQueries = [];
+  // What each release status read sent in X-Quiver-Client, oldest first.
+  const clients = [];
   const downloads = [];
   // Usage data sent to the stand-in for PostHog (QUIVER_POSTHOG_HOST): events, and every request body as sent.
   const telemetry = [];
@@ -415,12 +417,19 @@ export async function startMockApi({ pageSize = Infinity } = {}) {
       }
     }
     // The site's internal release status feed has no public query, so it's still REST.
-    if (url.pathname === "/api/v1/release-status")
+    if (url.pathname === "/api/v1/release-status") {
+      // The launcher names itself in X-Quiver-Client, so the browser asks first, as the site answers.
+      if (req.method === "OPTIONS") {
+        res.writeHead(204, { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, X-Quiver-Client" });
+        return res.end();
+      }
+      clients.push(req.headers["x-quiver-client"] ?? null);
       return send({
         items: entries.map((e) => ({ id: e.id, slug: e.slug, provider: "github", repository: `quiver/${e.slug}` })),
         nextCursor: null,
         isDone: true,
       });
+    }
     send({ error: { message: "Not found" } }, 404);
   });
   // Each app's own artwork. As the site's entryDTO does, a slot an app has none of is its game's, and so is its icon.
@@ -477,6 +486,8 @@ export async function startMockApi({ pageSize = Infinity } = {}) {
     lastQuery: () => lastQuery,
     /** Every Convex query asked for, oldest first: { path, args }. */
     convexQueries: () => convexQueries,
+    /** What each release status read sent in X-Quiver-Client, oldest first. */
+    clients: () => clients,
     /** Every release file downloaded, by name, oldest first. */
     downloads: () => downloads,
     /** Publishes a new verified release of every app. */

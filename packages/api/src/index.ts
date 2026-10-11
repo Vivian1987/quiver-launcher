@@ -309,9 +309,14 @@ export type Client = {
   sharedList(slug: string): Promise<SharedList | null>;
 };
 
-export function createClient(base: string = DEFAULT_API): Client {
+/**
+ * `client` names the app in X-Quiver-Client, as "name/version", as the site's
+ * API terms ask (quiverlauncher.com/api-terms).
+ */
+export function createClient(base: string = DEFAULT_API, client?: string): Client {
+  const init = client ? { headers: { "X-Quiver-Client": client } } : undefined;
   async function get<T>(path: string): Promise<T> {
-    const response = await fetch(base + path);
+    const response = await fetch(base + path, init);
     if (!response.ok) {
       const body = await response.json().catch(() => null);
       throw new ApiError(response.status, body?.error?.message ?? `The catalog answered ${response.status}`);

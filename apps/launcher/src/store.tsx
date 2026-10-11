@@ -132,6 +132,9 @@ const LauncherContext = createContext<Launcher | null>(null);
 export const useLauncher = () => useContext(LauncherContext)!;
 
 /** The release a player gets: the newest that isn't a pre-release, else the newest. */
+/** The name the launcher sends the site's API in X-Quiver-Client. A fork sends its own (TRADEMARKS.md). */
+const CLIENT_NAME = "quiver-launcher";
+
 const latestOf = (releases: Release[]) => releases.find((r) => !r.prerelease) ?? releases[0];
 /** A custom app's repository from its key, for one not in the library; GitHub and GitLab don't mind its lower case. */
 const fromKey = (id: string): CustomApp => {
@@ -235,7 +238,10 @@ function LauncherState({ saved, children }: { saved: Saved; children: ReactNode 
   const [notice, setNotice] = useState<string | null>(null);
   const library = useMemo(() => allItems.filter((i) => !i.removed), [allItems]);
   // The catalog comes from the site's Convex queries, as on the website; REST only for the release status feed.
-  const client = useMemo(() => createConvexClient(config.convex, createClient(config.api)), [config.api, config.convex]);
+  const client = useMemo(
+    () => createConvexClient(config.convex, createClient(config.api, `${CLIENT_NAME}/${config.version}`)),
+    [config.api, config.convex, config.version],
+  );
   const github = useMemo(() => createGithub(config.githubApi), [config.githubApi]);
   const gitlab = useMemo(() => createGitlab(config.gitlabApi), [config.gitlabApi]);
   /** A custom app's releases, newest first. */
