@@ -51,4 +51,4 @@ palette and light/dark themes. Define these, for example on `:root`:
 
 `pnpm --filter @quiverlauncher/ui test` runs its tests.
 
-MIT licensed.
+Licensed under the [Mozilla Public License 2.0](../../LICENSE).

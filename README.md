@@ -66,4 +66,9 @@ CI passes the repository variable `POSTHOG_PROJECT_TOKEN`. See `apps/launcher/.e
 
 ## License
 
-MIT
+The code is licensed under the [Mozilla Public License 2.0](LICENSE). You can use, change and share it, and changes
+to its files must be shared under the same license when you distribute them. Versions released before this change
+were MIT licensed, and stay available under MIT.
+
+The license doesn't cover the Quiver name, logo or app icons. See [TRADEMARKS.md](TRADEMARKS.md) for how forks and
+other projects may use them.

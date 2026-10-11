@@ -16,4 +16,4 @@ The types follow the site's public responses (also described at `/api/v1/openapi
 doesn't know are ignored. It also has small helpers the launcher uses: `inferPlatform` for release file names,
 `parseRepository` for GitHub and GitLab addresses, and `listSlug`/`listUrl` for shared lists.
 
-MIT licensed.
+Licensed under the [Mozilla Public License 2.0](../../LICENSE).

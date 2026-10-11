@@ -2,7 +2,7 @@
 name = "quiver-launcher"
 version = "4.0.0-alpha.1"
 edition = "2021"
-license = "MIT"
+license = "MPL-2.0"
 
 [lib]
 name = "quiver_launcher_lib"
