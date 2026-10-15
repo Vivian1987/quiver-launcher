@@ -172,6 +172,9 @@ namespace QuiverLauncher
         public List<TagDisplayFilter> TagDisplayFilters { get; set; } = new List<TagDisplayFilter>();
         public string? ActiveTagDisplayFilterId { get; set; }
         public AppListScope ListScope { get; set; } = AppListScope.AllApps;
+        /// <summary>Catalog ratings the library is narrowed to ("runs", "issues", "broken", "unrated"); empty shows every app.</summary>
+        public List<string> ActiveRatingFilters { get; set; } = new List<string>();
+        public bool FiltersSectionCollapsed { get; set; }
         public Dictionary<string, List<string>> UserAppTags { get; set; } = new Dictionary<string, List<string>>();
         /// <summary>Repository → custom library display name override (when app is not in local apps.json).</summary>
         public Dictionary<string, string> UserAppDisplayNames { get; set; } = new Dictionary<string, string>();
@@ -185,6 +188,7 @@ namespace QuiverLauncher
             HiddenApps ??= new List<string>();
             ManuallyHiddenApps ??= new List<string>();
             TagDisplayFilters ??= new List<TagDisplayFilter>();
+            ActiveRatingFilters ??= new List<string>();
             PinnedFilterTags ??= new List<string>();
             UserAppTags ??= new Dictionary<string, List<string>>();
             UserAppDisplayNames ??= new Dictionary<string, string>();

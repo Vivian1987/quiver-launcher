@@ -259,6 +259,19 @@ public static class BrowseText
             : age.TotalHours >= 1 ? $"{(int)age.TotalHours} h ago" : "just now");
     }
 
+    /// <summary>
+    /// An app's verdict as a library filter key: "runs", "issues" or "broken" (the keys <see cref="ReviewResult"/> reads),
+    /// or "unrated" when no player has rated it or it isn't in the catalog.
+    /// </summary>
+    public static string RatingKey(QuiverCatalogApp? app) => app == null ? "unrated"
+        : ScoreParts(app.Recommended, app.ReportIssues, app.ReportBroken).Tone switch
+        {
+            "positive" => "runs",
+            "caution" => "issues",
+            "negative" => "broken",
+            _ => "unrated",
+        };
+
     public static string ReviewResult(string result) => result switch
     {
         "runs" => "Runs well",

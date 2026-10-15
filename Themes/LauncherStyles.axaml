@@ -849,7 +849,7 @@
 		<Setter Property="BorderThickness" Value="2"/>
 	</Style>
 
-	<!-- Library sidebar: Sort and Show each put a short label beside their control. -->
+	<!-- Library sidebar: Sort, Show and Rating each put a short label beside their control. -->
 	<Style Selector="TextBlock.sidebar-field-label">
 		<Setter Property="FontSize" Value="12"/>
 		<Setter Property="Foreground" Value="{DynamicResource ThemeTextSecondary}"/>
@@ -878,6 +878,22 @@
 		<Setter Property="Foreground" Value="{DynamicResource ThemeText}"/>
 		<Setter Property="FontWeight" Value="SemiBold"/>
 		<Setter Property="Opacity" Value="1"/>
+	</Style>
+
+	<!-- Rating: reads like the Sort dropdown and opens a menu of ratings to tick. -->
+	<Style Selector="Button.sidebar-dropdown">
+		<Setter Property="MinHeight" Value="32"/>
+		<Setter Property="Padding" Value="11,0,8,0"/>
+		<Setter Property="Background" Value="{DynamicResource ThemeDarker}"/>
+		<Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}"/>
+		<Setter Property="BorderThickness" Value="1"/>
+		<Setter Property="CornerRadius" Value="4"/>
+		<Setter Property="Foreground" Value="{DynamicResource ThemeText}"/>
+		<Setter Property="FontWeight" Value="Normal"/>
+		<Setter Property="VerticalContentAlignment" Value="Center"/>
+	</Style>
+	<Style Selector="Button.sidebar-dropdown.active">
+		<Setter Property="BorderBrush" Value="{DynamicResource ThemeAccent}"/>
 	</Style>
 
 	<Style Selector="Button.iconbutton">

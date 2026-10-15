@@ -785,6 +785,7 @@ namespace QuiverLauncher
                 Library.CancelSearch();
                 _gameManager.LibrarySearchText = string.Empty;
                 _settings.ActiveTagDisplayFilterId = null;
+                _settings.ActiveRatingFilters.Clear();
                 _gameManager.SetListScope(AppListScope.AllApps, _settings);
                 Library.RefreshFilters();
                 LibraryFiltersPanel.RefreshSidebarFilterSelection();

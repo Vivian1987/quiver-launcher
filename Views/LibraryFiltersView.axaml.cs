@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using QuiverLauncher.Services;
 using QuiverLauncher.ViewModels;
@@ -51,9 +52,10 @@ public partial class LibraryFiltersView : UserControl
         var controls = new List<Control>();
         if (!IsVisible)
             return controls;
-        controls.AddRange(new Control[] { SortByComboBox, UnhideAllGamesButton, HideNonInstalledButton, ShowHiddenGamesButton, AddDisplayFilterButton }
+        controls.AddRange(new Control[] { SortByComboBox, UnhideAllGamesButton, HideNonInstalledButton, ShowHiddenGamesButton, FiltersSectionToggle, AddDisplayFilterButton, RatingFilterButton }
             .Where(c => c.IsEffectivelyVisible && c.IsEnabled));
-        controls.AddRange(TagDisplayFiltersItemsControl.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("display-filter-row") && b.IsVisible && b.IsEnabled));
+        if (FiltersSectionBody.IsVisible)
+            controls.AddRange(TagDisplayFiltersItemsControl.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("display-filter-row") && b.IsVisible && b.IsEnabled));
         return controls;
     }
 
@@ -121,7 +123,19 @@ public partial class LibraryFiltersView : UserControl
         UnhideAllGamesButton?.Classes.Set("selected", _settings.ListScope == AppListScope.AllApps);
         HideNonInstalledButton?.Classes.Set("selected", _settings.ListScope == AppListScope.InstalledOnly);
         ShowHiddenGamesButton?.Classes.Set("selected", _settings.ListScope == AppListScope.HiddenOnly);
+        var ratings = LibraryFiltersViewModel.Ratings.Where(r => Model.IsRatingActive(r.Key)).Select(r => r.Label).ToList();
+        RatingFilterSummary.Text = ratings.Count == 0 ? "Any rating" : string.Join(", ", ratings);
+        RatingFilterButton.Classes.Set("active", ratings.Count > 0);
+        ToolTip.SetTip(RatingFilterButton, ratings.Count == 0 ? "Filter by what players report on quiverlauncher.com" : RatingFilterSummary.Text);
+        var filtersCollapsed = _settings.FiltersSectionCollapsed;
+        FiltersSectionBody.IsVisible = !filtersCollapsed;
+        FiltersSectionChevron.Data = Chevron(filtersCollapsed);
+        ToolTip.SetTip(FiltersSectionToggle, filtersCollapsed ? "Show filters" : "Hide filters");
     }
+
+    // Points right while a section is folded away, down while it is open.
+    private static Geometry Chevron(bool collapsed) =>
+        Geometry.Parse(collapsed ? "M4.5,3 L7.5,6 L4.5,9" : "M3,4.5 L6,7.5 L9,4.5");
 
     private void AddDisplayFilter_Click(object? sender, RoutedEventArgs e)
     {
@@ -390,6 +404,25 @@ public partial class LibraryFiltersView : UserControl
         if (filterId == null)
             return;
         ShowDisplayFilterOverlay(filterId);
+    }
+
+    private void FiltersSectionToggle_Click(object? sender, RoutedEventArgs e) => RunAction(Model.ToggleFiltersSection, "Failed to save settings");
+    private void RatingFlyout_Opening(object? sender, EventArgs e)
+    {
+        GamepadMenuFlyoutNavigation.Attach(sender as MenuFlyout);
+        if (sender is MenuFlyout flyout)
+            foreach (var item in flyout.Items.OfType<MenuItem>())
+                if (item.Tag is string rating)
+                    item.IsChecked = Model.IsRatingActive(rating);
+    }
+
+    private void RatingFilter_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string rating } item)
+            return;
+        RunAction(() => Model.ToggleRating(rating), "Failed to filter apps");
+        // A check item also flips itself; the saved filter decides which way it ends up.
+        Dispatcher.UIThread.Post(() => item.IsChecked = Model.IsRatingActive(rating));
     }
 
     private void UnhideAllGamesButton_Click(object? sender, RoutedEventArgs e) => RunAction(() => Model.SetScope(AppListScope.AllApps), "Failed to show all apps");

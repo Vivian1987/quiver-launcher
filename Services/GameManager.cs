@@ -395,6 +395,9 @@ namespace QuiverLauncher.Services
                     changed.Add(app);
                     app.RefreshLibraryCardTags();
                 }
+                // Ratings come with the catalog listing, so a rating filter is applied again once it has loaded.
+                if (_settingsStore.Current.ActiveRatingFilters is { Count: > 0 })
+                    ApplyTagDisplayFilter(_settingsStore.Current);
             }
             if (UiThreadInvoker is { } invoker) await invoker(Apply).ConfigureAwait(false);
             else Apply();
@@ -578,6 +581,10 @@ namespace QuiverLauncher.Services
                             filter.ExcludeMatchMode));
                 }
             }
+
+            if (settings.ActiveRatingFilters.Count > 0)
+                visibleGames = visibleGames.Where(game =>
+                    settings.ActiveRatingFilters.Contains(BrowseText.RatingKey(CatalogReleases.ListedApp(game)), StringComparer.OrdinalIgnoreCase));
 
             if (!string.IsNullOrWhiteSpace(LibrarySearchText))
                 visibleGames = visibleGames.Where(game => AppSearch.Matches(game, LibrarySearchText));
