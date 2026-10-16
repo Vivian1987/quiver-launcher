@@ -69,6 +69,32 @@ public class OverlayExclusivityTests
         finally { window.Close(); await view.ShutdownAsync(); }
     }
 
+    [AvaloniaFact]
+    public async Task Window_close_button_closes_the_filter_dialog_before_the_launcher()
+    {
+        var view = new MainView(new() { SettingsStore = new Store(), EnableInput = false, EnableMusic = false, InitializeOnOpen = false });
+        var window = new Window { Content = view, Width = 1200, Height = 800 };
+        using var host = new DesktopHostController(window, view);
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var filter = view.FindControl<DisplayFilterEditorView>("DisplayFilterOverlay")!;
+            void Click(Control root, string name)
+            {
+                root.FindControl<Button>(name)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+            }
+
+            Click(view.FindControl<LibraryFiltersView>("LibraryFiltersPanel")!, "AddDisplayFilterButton");
+            filter.IsVisible.Should().BeTrue();
+            Click(view, "CloseLauncherButton");
+            filter.IsVisible.Should().BeFalse();
+            window.IsVisible.Should().BeTrue();
+        }
+        finally { window.Close(); await view.ShutdownAsync(); }
+    }
+
     private sealed class Store : ISettingsStore
     {
         public AppSettings Current { get; } = new() { FirstStartup = false, AppsPath = Path.Combine(Path.GetTempPath(), "quiver-overlay-tests", Guid.NewGuid().ToString("N")), EnableGamepadInput = false };

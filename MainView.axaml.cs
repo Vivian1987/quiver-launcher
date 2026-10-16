@@ -1153,6 +1153,12 @@ namespace QuiverLauncher
                 return;
             }
 
+            if (IsDisplayFilterOverlayOpen)
+            {
+                CloseDisplayFilterOverlay();
+                return;
+            }
+
             if (MessagePromptOverlay.Dismiss())
                 return;
             CloseHost();
