@@ -8,6 +8,12 @@ public sealed class LibraryFiltersViewModel(GameManager manager, LibraryViewMode
     public AppSettings Settings => library.Settings.Current;
     public ObservableCollection<TagDisplayFilterListItem> TagDisplayFilters => library.TagDisplayFilters;
     public void Save() => library.Settings.SaveCurrent();
+    public void SetSort(string sort)
+    {
+        library.SortBy = sort;
+        Settings.SortBy = sort;
+        library.ApplySorting();
+    }
     public void SetScope(AppListScope scope)
     {
         manager.SetListScope(scope, Settings);
@@ -23,6 +29,26 @@ public sealed class LibraryFiltersViewModel(GameManager manager, LibraryViewMode
         library.RefreshFilters();
         library.RefreshContinue();
         library.ApplySorting();
+    }
+    /// <summary>The Rating filter's choices, in the order the App Catalog ranks them (see <see cref="BrowseText.RatingKey"/>).</summary>
+    public static IReadOnlyList<(string Key, string Label)> Ratings { get; } =
+        [("runs", "Runs well"), ("issues", "Has issues"), ("broken", "Doesn't run"), ("unrated", "Not rated yet")];
+    public bool IsRatingActive(string rating) => Settings.ActiveRatingFilters.Contains(rating, StringComparer.OrdinalIgnoreCase);
+    /// <summary>Turns one rating on or off; several can be on, and the library shows apps with any of them.</summary>
+    public void ToggleRating(string rating)
+    {
+        Settings.EnsureInitialized();
+        if (Settings.ActiveRatingFilters.RemoveAll(r => string.Equals(r, rating, StringComparison.OrdinalIgnoreCase)) == 0)
+            Settings.ActiveRatingFilters.Add(rating);
+        Save();
+        manager.ApplyTagDisplayFilter(Settings);
+        library.RefreshContinue();
+        library.ApplySorting();
+    }
+    public void ToggleFiltersSection()
+    {
+        Settings.FiltersSectionCollapsed = !Settings.FiltersSectionCollapsed;
+        Save();
     }
     public void Delete(string filterId)
     {
