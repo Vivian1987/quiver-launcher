@@ -276,6 +276,117 @@ public class ReleaseVerificationTests
     }
 
     [AvaloniaFact]
+    public async Task Rolling_catalog_release_that_renamed_the_installed_file_is_offered_and_installed_as_an_update()
+    {
+        using var launcher = new Launcher();
+        var repo = Repo();
+        byte[] first = Zip("nightly-1.txt"), second = Zip("nightly-2.txt");
+        const string lastNightFile = "alpha-nightly-20261017-windows.zip", tonightFile = "alpha-nightly-20261018-windows.zip";
+        var app = App("Alpha", repo, manager: launcher.Manager);
+        InstallOnDisk(app, launcher.Manager.GamesFolder, "nightly");
+        var path = app.GetInstallPath(launcher.Manager.GamesFolder);
+        // Installed from quiverlauncher.com's link, which gives no upload time.
+        await new InstalledBuild(lastNightFile, Sha256(first).ToLowerInvariant()).WriteAsync(path);
+        launcher.Network.Site["/release-status?limit=100"] = Page([Status("alpha", repo, "nightly", rolling: true)]);
+        launcher.Network.Site["/apps/alpha/release-history?limit=100"] = Page(
+            [History("nightly", "verified", [], [(tonightFile, second), (tonightFile.Replace("windows", "linux"), Zip("linux.txt"))], rolling: true)]);
+        launcher.Network.Files[SiteLink("nightly", tonightFile)] = second;
+
+        await GameStatusService.CheckStatusAsync(app, launcher.Manager.HttpClient, launcher.Manager.GamesFolder, forceUpdateCheck: true);
+
+        (app.InstalledVersion, app.Status).Should().Be(("nightly", GameStatus.UpdateAvailable));
+        var player = new Dialogs(confirm: true);
+        await GameDownloadInstallService.DownloadAndInstallAsync(app, launcher.Manager.HttpClient, launcher.Manager.GamesFolder,
+            null, launcher.Store.Current, GameStatus.UpdateAvailable, player);
+        player.Errors.Should().BeEmpty();
+        (app.InstalledVersion, app.Status).Should().Be(("nightly", GameStatus.Installed));
+        File.Exists(Path.Combine(path, "nightly-2.txt")).Should().BeTrue();
+        InstalledBuild.Read(path)!.FileName.Should().Be(tonightFile, "the renamed Windows build is the installed one's");
+    }
+
+    [Fact]
+    public void Only_the_verified_release_is_rolling()
+    {
+        var app = new GameInfo { CatalogRolling = true, CatalogVerifiedVersion = "nightly" };
+
+        app.IsRollingRelease("nightly").Should().BeTrue();
+        app.IsRollingRelease("v1.0").Should().BeFalse("a release the player pinned instead isn't the one quiverlauncher.com checked");
+        new GameInfo { CatalogVerifiedVersion = "nightly" }.IsRollingRelease("nightly").Should().BeFalse();
+    }
+
+    [AvaloniaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Nightly_naming_each_builds_file_differently_is_offered_and_installed_as_an_update(bool rebuilt)
+    {
+        using var launcher = new Launcher();
+        var repo = Repo();
+        byte[] first = Zip("nightly-1.txt"), second = Zip("nightly-2.txt");
+        const string lastNightFile = "alpha-nightly-20261017-windows.zip", tonightFile = "alpha-nightly-20261018-windows.zip";
+        DateTimeOffset lastNight = new(2026, 10, 17, 3, 0, 0, TimeSpan.Zero), tonight = lastNight.AddDays(1);
+        // An app outside the catalog: last night's build is installed, and recorded with when GitHub had it uploaded.
+        var app = App("Alpha", repo, manager: launcher.Manager);
+        InstallOnDisk(app, launcher.Manager.GamesFolder, "nightly");
+        var path = app.GetInstallPath(launcher.Manager.GamesFolder);
+        await new InstalledBuild(lastNightFile, Sha256(first).ToLowerInvariant(), lastNight).WriteAsync(path);
+        var (file, bytes, uploadedAt) = rebuilt ? (tonightFile, second, tonight) : (lastNightFile, first, lastNight);
+        var link = $"https://downloads.example/nightly/{file}";
+        // Every build is a prerelease, so GitHub has no Latest and the release list is read.
+        launcher.Network.GitHub[$"/repos/{repo}/releases"] = Json(new[]
+        {
+            new
+            {
+                tag_name = "nightly", prerelease = true,
+                assets = new[] { new { name = file, browser_download_url = link, digest = "sha256:" + Sha256(bytes), updated_at = uploadedAt } },
+            },
+        });
+        launcher.Network.Files[link] = bytes;
+
+        await GameStatusService.CheckStatusAsync(app, launcher.Manager.HttpClient, launcher.Manager.GamesFolder, forceUpdateCheck: true);
+
+        app.InstalledVersion.Should().Be("nightly");
+        if (!rebuilt)
+        {
+            app.Status.Should().Be(GameStatus.Installed, "last night's build is still the one published");
+            return;
+        }
+        app.Status.Should().Be(GameStatus.UpdateAvailable, "the installed file was replaced by a newer one under the same tag");
+        var player = new Dialogs(confirm: true);
+        await GameDownloadInstallService.DownloadAndInstallAsync(app, launcher.Manager.HttpClient, launcher.Manager.GamesFolder,
+            null, launcher.Store.Current, GameStatus.UpdateAvailable, player);
+        player.Errors.Should().BeEmpty();
+        launcher.Network.Downloads.Should().Be(1);
+        (app.InstalledVersion, app.Status).Should().Be(("nightly", GameStatus.Installed));
+        File.Exists(Path.Combine(path, "nightly-2.txt")).Should().BeTrue();
+        InstalledBuild.Read(path).Should().Be(new InstalledBuild(tonightFile, Sha256(second).ToLowerInvariant(), tonight));
+    }
+
+    [AvaloniaFact]
+    public async Task Nightly_installed_before_builds_were_recorded_is_offered_a_build_uploaded_since()
+    {
+        using var launcher = new Launcher();
+        var repo = Repo();
+        var app = App("Alpha", repo, manager: launcher.Manager);
+        InstallOnDisk(app, launcher.Manager.GamesFolder, "nightly");
+        var path = app.GetInstallPath(launcher.Manager.GamesFolder);
+        // No installed-build.txt: only version.txt says when it was installed.
+        File.SetLastWriteTimeUtc(Path.Combine(path, "version.txt"), new DateTime(2026, 10, 17, 4, 0, 0, DateTimeKind.Utc));
+        launcher.Network.GitHub[$"/repos/{repo}/releases"] = Json(new[]
+        {
+            new
+            {
+                tag_name = "nightly", prerelease = true,
+                assets = new[] { new { name = Asset, browser_download_url = "https://downloads.example/nightly/" + Asset,
+                    updated_at = new DateTimeOffset(2026, 10, 18, 3, 0, 0, TimeSpan.Zero) } },
+            },
+        });
+
+        await GameStatusService.CheckStatusAsync(app, launcher.Manager.HttpClient, launcher.Manager.GamesFolder, forceUpdateCheck: true);
+
+        (app.InstalledVersion, app.Status).Should().Be(("nightly", GameStatus.UpdateAvailable));
+    }
+
+    [AvaloniaFact]
     public async Task Automatic_update_to_an_unverified_release_downloads_nothing_and_keeps_the_installed_one()
     {
         using var launcher = new Launcher();
