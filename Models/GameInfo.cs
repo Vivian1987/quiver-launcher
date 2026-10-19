@@ -1839,11 +1839,12 @@ namespace QuiverLauncher.Models
 
         /// <summary>
         /// When the selected GitHub tag is already installed, drop UpdateAvailable even if
-        /// numeric comparison still treats Latest as newer.
+        /// numeric comparison still treats Latest as newer. Not when the tag was rebuilt since (a nightly's new build).
         /// </summary>
         internal bool TryAcknowledgeAlreadyInstalledRelease(string? releaseTag)
         {
-            if (!ReleaseSelection.IsSameInstalledRelease(InstalledVersion, releaseTag))
+            if (!ReleaseSelection.IsSameInstalledRelease(InstalledVersion, releaseTag) ||
+                Services.InstalledBuild.IsRebuilt(InstalledBuild, InstalledAt, _cachedRelease, InstalledVersion, IsRollingRelease(InstalledVersion)))
                 return false;
 
             if (Status == GameStatus.UpdateAvailable)
