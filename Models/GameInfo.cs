@@ -756,8 +756,12 @@ namespace QuiverLauncher.Models
         [System.Text.Json.Serialization.JsonIgnore]
         public DateTimeOffset? InstalledAt { get; set; }
 
-        /// <summary>The release updates and installs aim for: the player's pin, else the verified release.</summary>
-        public string? ReleaseTarget => string.IsNullOrWhiteSpace(PreferredVersion) ? CatalogVerifiedVersion : PreferredVersion;
+        /// <summary>
+        /// The release updates and installs aim for: the player's pin, else the verified release, else the rolling tag the
+        /// app was installed from (a nightly), which it keeps following rather than the repository's Latest.
+        /// </summary>
+        public string? ReleaseTarget => !string.IsNullOrWhiteSpace(PreferredVersion) ? PreferredVersion : CatalogVerifiedVersion ??
+            (ReleaseVersionIdentity.IsRollingTag(InstalledVersion) && !IsUnknownInstalledVersion(InstalledVersion) ? InstalledVersion!.Trim() : null);
 
         internal bool MatchesReleaseTarget(string? version) =>
             string.IsNullOrWhiteSpace(ReleaseTarget) || ReleaseVersionIdentity.AreVersionsEquivalent(ReleaseTarget, version);
@@ -1151,11 +1155,16 @@ namespace QuiverLauncher.Models
             if (DeferUpdateTracking && !unknownInstall)
                 return false;
 
-            if (!unknownInstall && !IsNewerVersion(LatestVersion, InstalledVersion!))
+            if (!unknownInstall && !IsNewerVersion(LatestVersion, InstalledVersion!) &&
+                // Builds tagged by date or commit: numbers can't tell, so a release uploaded since the install is newer.
+                (ReleaseVersionIdentity.CanCompareVersions(LatestVersion, InstalledVersion) ||
+                    !Services.InstalledBuild.IsUploadedSince(InstalledBuild, InstalledAt, _cachedRelease)))
                 return false;
 
             if (!string.IsNullOrWhiteSpace(SkippedUpdateVersion) &&
-                !IsNewerVersion(LatestVersion, SkippedUpdateVersion))
+                !IsNewerVersion(LatestVersion, SkippedUpdateVersion) &&
+                (ReleaseVersionIdentity.CanCompareVersions(LatestVersion, SkippedUpdateVersion) ||
+                    AreVersionsEquivalent(LatestVersion, SkippedUpdateVersion)))
             {
                 return false;
             }

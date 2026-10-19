@@ -73,7 +73,7 @@ public sealed record InstalledBuild(string FileName, string Sha256, DateTimeOffs
         if (release == null || !ReleaseVersionIdentity.AreVersionsEquivalent(release.tag_name, installedVersion)) return false;
         var downloads = GitHubReleaseService.GetDownloadableAssets(release);
         if (build == null)
-            return installedAt is { } at && !release.tag_name.Any(char.IsAsciiDigit) && downloads.Any(a => a.updated_at > at);
+            return installedAt is { } at && ReleaseVersionIdentity.IsRollingTag(release.tag_name) && downloads.Any(a => a.updated_at > at);
         var file = release.assets?.FirstOrDefault(a => string.Equals(a.name, build.FileName, StringComparison.OrdinalIgnoreCase));
         if (file?.digest is { } digest && digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
             return !string.Equals(digest["sha256:".Length..], build.Sha256, StringComparison.OrdinalIgnoreCase);
@@ -84,4 +84,12 @@ public sealed record InstalledBuild(string FileName, string Sha256, DateTimeOffs
         if ((build.UploadedAt ?? installedAt) is not { } since) return false;
         return (file ?? renamed) is { } same ? same.updated_at > since : downloads.Any(a => a.updated_at > since);
     }
+
+    /// <summary>
+    /// Whether <paramref name="release"/> has a file uploaded after the installed build was (or, without a record of
+    /// that, after <paramref name="installedAt"/>): what tells a newer release when its tag's numbers can't.
+    /// </summary>
+    public static bool IsUploadedSince(InstalledBuild? build, DateTimeOffset? installedAt, GitHubRelease? release) =>
+        release != null && (build?.UploadedAt ?? installedAt) is { } since &&
+        GitHubReleaseService.GetDownloadableAssets(release).Any(a => a.updated_at > since);
 }

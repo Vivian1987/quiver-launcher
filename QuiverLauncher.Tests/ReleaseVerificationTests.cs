@@ -386,6 +386,93 @@ public class ReleaseVerificationTests
         (app.InstalledVersion, app.Status).Should().Be(("nightly", GameStatus.UpdateAvailable));
     }
 
+    [Theory]
+    [InlineData("latest-nightly", null, null, "latest-nightly")]
+    [InlineData("latest-nightly", "v0.4.0", null, "v0.4.0")] // The player's pin.
+    [InlineData("latest-nightly", null, "v0.3.3", "v0.3.3")] // The release quiverlauncher.com verified.
+    [InlineData("v0.4.0", null, null, null)]
+    [InlineData("Unknown", null, null, null)]
+    [InlineData(null, null, null, null)]
+    public void App_installed_from_a_rolling_tag_keeps_following_it(string? installed, string? pin, string? verified, string? target)
+    {
+        var app = new GameInfo { InstalledVersion = installed, PreferredVersion = pin, CatalogVerifiedVersion = verified };
+
+        app.ReleaseTarget.Should().Be(target);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Nightly_is_followed_rather_than_the_repositorys_stable_Latest(bool rebuilt)
+    {
+        using var launcher = new Launcher();
+        var token = TestContext.Current.CancellationToken;
+        var repo = Repo();
+        var app = App("Alpha", repo, manager: launcher.Manager);
+        InstallOnDisk(app, launcher.Manager.GamesFolder, "latest-nightly");
+        File.SetLastWriteTimeUtc(Path.Combine(app.GetInstallPath(launcher.Manager.GamesFolder), "version.txt"),
+            new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc));
+        launcher.Manager.Games.Add(app);
+        var nightlyUpload = rebuilt ? new DateTimeOffset(2026, 10, 18, 3, 0, 0, TimeSpan.Zero) : new DateTimeOffset(2026, 9, 30, 3, 0, 0, TimeSpan.Zero);
+        // A stable release came out after the nightly was installed, and is GitHub's Latest.
+        var stable = Uploaded("v0.4.1", new DateTimeOffset(2026, 10, 17, 0, 0, 0, TimeSpan.Zero));
+        launcher.Network.GitHub[$"/repos/{repo}/releases/latest"] = Json(stable);
+        launcher.Network.GitHub[$"/repos/{repo}/releases"] = Json(new[] { stable, Uploaded("latest-nightly", nightlyUpload, prerelease: true) });
+
+        // Checking again changes nothing: the nightly isn't a pin that the check clears.
+        foreach (var _ in new[] { 1, 2 })
+        {
+            (await launcher.Manager.CheckInstalledUpdatesAsync(true, null, token)).Successful.Should().Be(1);
+            app.LatestVersion.Should().Be("latest-nightly");
+            app.Status.Should().Be(rebuilt ? GameStatus.UpdateAvailable : GameStatus.Installed);
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData("KytyPS5-2026-10-19-e5f0ee7", "2026-10-19T04:00:00Z", true)]
+    [InlineData("f1e2d3c", "2026-10-19T04:00:00Z", true)]
+    // GitHub's Latest is an older build the developer promoted: not an update.
+    [InlineData("KytyPS5-2026-10-17-0a1b2c3", "2026-10-17T04:00:00Z", false)]
+    public async Task Build_tagged_by_date_or_commit_is_newer_when_uploaded_after_the_install(string latest, string uploaded, bool newer)
+    {
+        using var launcher = new Launcher();
+        var token = TestContext.Current.CancellationToken;
+        var repo = Repo();
+        var app = App("Alpha", repo, manager: launcher.Manager);
+        InstallOnDisk(app, launcher.Manager.GamesFolder, "KytyPS5-2026-10-18-37df7f3");
+        File.SetLastWriteTimeUtc(Path.Combine(app.GetInstallPath(launcher.Manager.GamesFolder), "version.txt"),
+            new DateTime(2026, 10, 18, 23, 0, 0, DateTimeKind.Utc));
+        launcher.Manager.Games.Add(app);
+        launcher.Network.GitHub[$"/repos/{repo}/releases/latest"] = Json(Uploaded(latest, DateTimeOffset.Parse(uploaded)));
+
+        (await launcher.Manager.CheckInstalledUpdatesAsync(true, null, token)).Successful.Should().Be(1);
+
+        app.LatestVersion.Should().Be(latest);
+        app.Status.Should().Be(newer ? GameStatus.UpdateAvailable : GameStatus.Installed);
+    }
+
+    [AvaloniaTheory]
+    [InlineData("KytyPS5-2026-10-19-0cad467", true)]
+    [InlineData("KytyPS5-2026-10-19-e5f0ee7", false)]
+    public async Task Skipping_a_build_tagged_by_date_or_commit_skips_only_that_build(string skipped, bool offered)
+    {
+        using var launcher = new Launcher();
+        var token = TestContext.Current.CancellationToken;
+        var repo = Repo();
+        var app = App("Alpha", repo, manager: launcher.Manager);
+        InstallOnDisk(app, launcher.Manager.GamesFolder, "KytyPS5-2026-10-18-37df7f3");
+        File.SetLastWriteTimeUtc(Path.Combine(app.GetInstallPath(launcher.Manager.GamesFolder), "version.txt"),
+            new DateTime(2026, 10, 18, 23, 0, 0, DateTimeKind.Utc));
+        app.SkippedUpdateVersion = skipped;
+        launcher.Manager.Games.Add(app);
+        launcher.Network.GitHub[$"/repos/{repo}/releases/latest"] = Json(
+            Uploaded("KytyPS5-2026-10-19-e5f0ee7", new DateTimeOffset(2026, 10, 19, 4, 0, 0, TimeSpan.Zero)));
+
+        (await launcher.Manager.CheckInstalledUpdatesAsync(true, null, token)).Successful.Should().Be(1);
+
+        app.Status.Should().Be(offered ? GameStatus.UpdateAvailable : GameStatus.Installed);
+    }
+
     [AvaloniaFact]
     public async Task Automatic_update_to_an_unverified_release_downloads_nothing_and_keeps_the_installed_one()
     {
@@ -805,6 +892,13 @@ public class ReleaseVerificationTests
         File.ReadAllBytes(Path.Combine(path, "game.exe")).Should().Equal(OldExe);
         Directory.GetFiles(path).Select(f => Path.GetFileName(f)).Should().BeEquivalentTo(new[] { "version.txt", "game.exe" }, "nothing of v2 was installed");
     }
+
+    /// <summary>A GitHub release whose one file was uploaded at <paramref name="uploadedAt"/>.</summary>
+    private static object Uploaded(string tag, DateTimeOffset uploadedAt, bool prerelease = false) => new
+    {
+        tag_name = tag, prerelease,
+        assets = new[] { new { name = Asset, browser_download_url = $"https://downloads.example/{tag}/{Asset}", updated_at = uploadedAt } },
+    };
 
     private static GitHubRelease OnGitHub(string tag, string? digest = null) => new()
     {
