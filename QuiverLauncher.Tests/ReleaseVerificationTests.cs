@@ -473,6 +473,72 @@ public class ReleaseVerificationTests
         app.Status.Should().Be(offered ? GameStatus.UpdateAvailable : GameStatus.Installed);
     }
 
+    [AvaloniaTheory]
+    [InlineData(false, "v1.2.0", GameStatus.Installed)]
+    [InlineData(true, "v1.3.0-beta.1", GameStatus.UpdateAvailable)]
+    public async Task Prerelease_setting_offers_the_newest_prerelease_instead_of_GitHubs_Latest(bool include, string latest, GameStatus status)
+    {
+        using var launcher = new Launcher();
+        var token = TestContext.Current.CancellationToken;
+        var repo = Repo();
+        launcher.Store.Current.IncludePrereleaseAppUpdates = include;
+        var app = App("Alpha", repo, manager: launcher.Manager);
+        InstallOnDisk(app, launcher.Manager.GamesFolder, "v1.2.0");
+        launcher.Manager.Games.Add(app);
+        var stable = Uploaded("v1.2.0", new DateTimeOffset(2026, 10, 10, 0, 0, 0, TimeSpan.Zero));
+        launcher.Network.GitHub[$"/repos/{repo}/releases/latest"] = Json(stable);
+        launcher.Network.GitHub[$"/repos/{repo}/releases"] = Json(new[]
+            { Uploaded("v1.3.0-beta.1", new DateTimeOffset(2026, 10, 15, 0, 0, 0, TimeSpan.Zero), prerelease: true), stable });
+
+        (await launcher.Manager.CheckInstalledUpdatesAsync(true, null, token)).Successful.Should().Be(1);
+
+        (app.LatestVersion, app.Status).Should().Be((latest, status));
+    }
+
+    [AvaloniaFact]
+    public async Task Prerelease_setting_offers_the_stable_release_that_follows_an_installed_beta()
+    {
+        using var launcher = new Launcher();
+        var token = TestContext.Current.CancellationToken;
+        var repo = Repo();
+        launcher.Store.Current.IncludePrereleaseAppUpdates = true;
+        var app = App("Alpha", repo, manager: launcher.Manager);
+        InstallOnDisk(app, launcher.Manager.GamesFolder, "v1.3.0-beta.2");
+        File.SetLastWriteTimeUtc(Path.Combine(app.GetInstallPath(launcher.Manager.GamesFolder), "version.txt"),
+            new DateTime(2026, 10, 15, 0, 0, 0, DateTimeKind.Utc));
+        launcher.Manager.Games.Add(app);
+        var final = Uploaded("v1.3.0", new DateTimeOffset(2026, 10, 20, 0, 0, 0, TimeSpan.Zero));
+        launcher.Network.GitHub[$"/repos/{repo}/releases/latest"] = Json(final);
+        launcher.Network.GitHub[$"/repos/{repo}/releases"] = Json(new[]
+            { final, Uploaded("v1.3.0-beta.2", new DateTimeOffset(2026, 10, 14, 0, 0, 0, TimeSpan.Zero), prerelease: true) });
+
+        (await launcher.Manager.CheckInstalledUpdatesAsync(true, null, token)).Successful.Should().Be(1);
+
+        // 1.3.0 and 1.3.0-beta.2 have the same numbers: the later upload is the newer release.
+        (app.LatestVersion, app.Status).Should().Be(("v1.3.0", GameStatus.UpdateAvailable));
+    }
+
+    [AvaloniaFact]
+    public async Task Prerelease_setting_installs_the_newest_prerelease()
+    {
+        using var launcher = new Launcher();
+        var repo = Repo();
+        launcher.Store.Current.IncludePrereleaseAppUpdates = true;
+        var stable = Uploaded("v1.2.0", new DateTimeOffset(2026, 10, 10, 0, 0, 0, TimeSpan.Zero));
+        launcher.Network.GitHub[$"/repos/{repo}/releases/latest"] = Json(stable);
+        launcher.Network.GitHub[$"/repos/{repo}/releases"] = Json(new[]
+            { Uploaded("v1.3.0-beta.1", new DateTimeOffset(2026, 10, 15, 0, 0, 0, TimeSpan.Zero), prerelease: true), stable });
+        launcher.Network.Files[$"https://downloads.example/v1.3.0-beta.1/{Asset}"] = Zip("beta.txt");
+        var app = App("Alpha", repo, manager: launcher.Manager);
+        var player = new Dialogs(confirm: true);
+
+        await GameDownloadInstallService.DownloadAndInstallAsync(app, launcher.Manager.HttpClient, launcher.Manager.GamesFolder,
+            null, launcher.Store.Current, GameStatus.NotInstalled, player);
+
+        player.Errors.Should().BeEmpty();
+        (app.InstalledVersion, app.Status).Should().Be(("v1.3.0-beta.1", GameStatus.Installed));
+    }
+
     [AvaloniaFact]
     public async Task Automatic_update_to_an_unverified_release_downloads_nothing_and_keeps_the_installed_one()
     {

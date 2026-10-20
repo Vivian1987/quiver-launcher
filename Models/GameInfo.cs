@@ -1705,8 +1705,13 @@ namespace QuiverLauncher.Models
             IReadOnlyList<GitHubRelease>? releases,
             string? preferredVersion = null,
             string? installedVersion = null,
-            string? githubLatestTag = null) =>
-            ReleaseSelection.SelectLatestRelease(releases, preferredVersion, installedVersion, githubLatestTag);
+            string? githubLatestTag = null,
+            bool includePrereleases = false) =>
+            ReleaseSelection.SelectLatestRelease(releases, preferredVersion, installedVersion, githubLatestTag, includePrereleases);
+
+        /// <summary>Updates follow pre-releases and nightly builds too (see <see cref="AppSettings.IncludePrereleaseAppUpdates"/>).</summary>
+        internal bool FollowsPrereleases =>
+            (GameManager?.CurrentSettings ?? SettingsStoreProvider.Default.Current).IncludePrereleaseAppUpdates;
 
         public bool TrySelectPlatformDownload(AppSettings settings) =>
             GameDownloadService.TrySelectPlatformDownload(this, GetLatestRelease(), settings);
@@ -1800,7 +1805,7 @@ namespace QuiverLauncher.Models
                 }
 
                 var latestRelease = SelectLatestRelease(
-                    result.Releases, ReleaseTarget, InstalledVersion, result.LatestTag);
+                    result.Releases, ReleaseTarget, InstalledVersion, result.LatestTag, FollowsPrereleases);
                 if (latestRelease != null && !string.IsNullOrWhiteSpace(latestRelease.tag_name))
                 {
                     RepositoryCheckError = null;

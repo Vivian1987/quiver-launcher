@@ -92,7 +92,7 @@ public static class GameDownloadInstallService
                 latestRelease = await game.CatalogReleaseAsync(LauncherSession.OperationCancellation).ConfigureAwait(false)
                     ?? await CatalogReleaseSelection.FetchSelectedAsync(httpClient,
                         game.RepositorySource, game.Repository, game.ReleaseTarget, apiToken,
-                        LauncherSession.OperationCancellation).ConfigureAwait(false);
+                        LauncherSession.OperationCancellation, settings.IncludePrereleaseAppUpdates).ConfigureAwait(false);
                 if (latestRelease != null)
                     GitHubApiCache.SetCache(game.RepositorySource, game.Repository, latestRelease.tag_name, "", latestRelease);
             }
